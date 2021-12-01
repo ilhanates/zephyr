@@ -20,7 +20,8 @@
 #include <bluetooth/gatt.h>
 #include <drivers/bluetooth/hci_driver.h>
 
-#define BT_DBG_ENABLED IS_ENABLED(CONFIG_BT_DEBUG_ATT)
+#define BT_DBG_ENABLED 1
+// IS_ENABLED(CONFIG_BT_DEBUG_ATT)
 #define LOG_MODULE_NAME bt_att
 #include "common/log.h"
 
@@ -605,7 +606,8 @@ static void att_req_send_process(struct bt_att *att)
 	SYS_SLIST_FOR_EACH_CONTAINER_SAFE (&att->chans, chan, tmp, node) {
 		/* If there is nothing pending use the channel */
 		if (!chan->req) {
-			if (IS_ENABLED(CONFIG_BT_EATT) &&
+			/* TODO: Make this work for non-read att_op */
+			if (IS_ENABLED(CONFIG_BT_EATT) && req->att_op == BT_ATT_OP_READ_REQ &&
 			    !att_chan_matches_bearer_option(chan, params->bearer_option)) {
 				continue;
 			}
@@ -1325,6 +1327,11 @@ static uint8_t att_read_req(struct bt_att_chan *chan, struct net_buf *buf)
 {
 	struct bt_att_read_req *req;
 	uint16_t handle;
+
+	/* TODO: Remove this */
+	if (IS_ENABLED(CONFIG_BT_EATT)) {
+		BT_INFO("Received on enhanced bearer? %d", atomic_test_bit(chan->flags, ATT_ENHANCED));
+	}
 
 	req = (void *)buf->data;
 
