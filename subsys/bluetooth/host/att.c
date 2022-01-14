@@ -570,30 +570,54 @@ static int bt_att_chan_req_send(struct bt_att_chan *chan,
 	return chan_req_send(chan, req);
 }
 
+static bool att_chan_matches_bearer_option(struct bt_att_chan *chan,
+					   enum bt_att_bearer_option bearer_option)
+{
+	switch (bearer_option) {
+	case BT_ATT_BEARER_UNENHANCED:
+		return !atomic_test_bit(chan->flags, ATT_ENHANCED);
+	case BT_ATT_BEARER_ENHANCED:
+		return atomic_test_bit(chan->flags, ATT_ENHANCED);
+	case BT_ATT_BEARER_ANY:
+		return true;
+	}
+	CODE_UNREACHABLE;
+}
+
 static void att_req_send_process(struct bt_att *att)
 {
-	sys_snode_t *node;
+	sys_snode_t *req_node;
 	struct bt_att_chan *chan, *tmp;
 
 	/* Pull next request from the list */
-	node = sys_slist_get(&att->reqs);
-	if (!node) {
+	req_node = sys_slist_get(&att->reqs);
+	if (!req_node) {
 		return;
 	}
 
-	BT_DBG("req %p", ATT_REQ(node));
+	struct bt_att_req *req = ATT_REQ(req_node);
 
-	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&att->chans, chan, tmp, node) {
+	BT_DBG("req %p", req);
+
+	/* TODO: Make this work for all bt_gatt_*_params */
+	struct bt_gatt_read_params *params = (struct bt_gatt_read_params *)req->user_data;
+
+	SYS_SLIST_FOR_EACH_CONTAINER_SAFE (&att->chans, chan, tmp, node) {
 		/* If there is nothing pending use the channel */
 		if (!chan->req) {
-			if (bt_att_chan_req_send(chan, ATT_REQ(node)) >= 0) {
+			if (IS_ENABLED(CONFIG_BT_EATT) &&
+			    !att_chan_matches_bearer_option(chan, params->bearer_option)) {
+				continue;
+			}
+
+			if (bt_att_chan_req_send(chan, req) >= 0) {
 				return;
 			}
 		}
 	}
 
 	/* Prepend back to the list as it could not be sent */
-	sys_slist_prepend(&att->reqs, node);
+	sys_slist_prepend(&att->reqs, req_node);
 }
 
 static uint8_t att_handle_rsp(struct bt_att_chan *chan, void *pdu, uint16_t len,

@@ -1419,6 +1419,9 @@ struct bt_gatt_read_params {
 			const struct bt_uuid *uuid;
 		} by_uuid;
 	};
+#ifdef CONFIG_BT_EATT
+	enum bt_att_bearer_option bearer_option;
+#endif /* CONFIG_BT_EATT */
 };
 
 /** @brief Read Attribute Value by handle

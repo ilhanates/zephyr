@@ -54,6 +54,12 @@ extern "C" {
 #define BT_ATT_LAST_ATTRIBUTE_HANDLE            0xffff
 #define BT_ATT_LAST_ATTTRIBUTE_HANDLE __DEPRECATED_MACRO BT_ATT_LAST_ATTRIBUTE_HANDLE
 
+enum bt_att_bearer_option {
+	BT_ATT_BEARER_UNENHANCED,
+	BT_ATT_BEARER_ENHANCED,
+	BT_ATT_BEARER_ANY,
+};
+
 #if defined(CONFIG_BT_TESTING)
 int bt_eatt_disconnect_one(struct bt_conn *conn);
 #endif /* CONFIG_BT_TESTING */
