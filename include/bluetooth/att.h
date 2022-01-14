@@ -58,6 +58,12 @@ extern "C" {
 int bt_eatt_disconnect_one(struct bt_conn *conn);
 #endif /* CONFIG_BT_TESTING */
 
+/* Connect EATT channels */
+int bt_eatt_connect(struct bt_conn *conn, uint8_t num_channels);
+
+/* Disconnect EATT channels */
+int bt_eatt_disconnect(struct bt_conn *conn);
+
 #ifdef __cplusplus
 }
 #endif
