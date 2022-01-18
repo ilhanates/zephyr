@@ -67,6 +67,9 @@ int bt_eatt_disconnect_one(struct bt_conn *conn);
 /* Connect EATT channels */
 int bt_eatt_connect(struct bt_conn *conn, uint8_t num_channels);
 
+struct bt_att_chan* bt_eatt_chan_reserve(struct bt_conn *conn);
+bool bt_eatt_chan_release(struct bt_conn *conn, struct bt_att_chan* reserved_chan);
+
 /* Disconnect EATT channels */
 int bt_eatt_disconnect(struct bt_conn *conn);
 

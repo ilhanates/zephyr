@@ -74,6 +74,7 @@ enum {
 	ATT_PENDING_CFM,
 	ATT_DISCONNECTED,
 	ATT_ENHANCED,
+	ATT_RESERVED,
 	ATT_PENDING_SENT,
 
 	/* Total number of flags - must be at the end of the enum */
@@ -585,6 +586,20 @@ static bool att_chan_matches_bearer_option(struct bt_att_chan *chan,
 	CODE_UNREACHABLE;
 }
 
+static bool att_chan_matches_reserved(struct bt_att_chan *reserved_chan, struct bt_att_chan *chan)
+{
+	bool chan_assigned = atomic_test_bit(chan->flags, ATT_RESERVED);
+
+	bool ret = false;
+	if (reserved_chan) {
+		ret = chan_assigned && chan && chan == reserved_chan;
+	} else {
+		ret = !chan_assigned;
+	}
+
+	return ret;
+}
+
 static void att_req_send_process(struct bt_att *att)
 {
 	sys_snode_t *req_node;
@@ -607,9 +622,11 @@ static void att_req_send_process(struct bt_att *att)
 		/* If there is nothing pending use the channel */
 		if (!chan->req) {
 			/* TODO: Make this work for non-read att_op */
-			if (IS_ENABLED(CONFIG_BT_EATT) && req->att_op == BT_ATT_OP_READ_REQ &&
-			    !att_chan_matches_bearer_option(chan, params->bearer_option)) {
-				continue;
+			if (IS_ENABLED(CONFIG_BT_EATT) && req->att_op == BT_ATT_OP_READ_REQ) {
+				if	(!att_chan_matches_reserved(params->att_chan, chan) ||
+					!att_chan_matches_bearer_option(chan, params->bearer_option)) {
+					continue;
+				}
 			}
 
 			if (bt_att_chan_req_send(chan, req) >= 0) {
@@ -3005,6 +3022,51 @@ int bt_eatt_connect(struct bt_conn *conn, uint8_t num_channels)
 	}
 
 	return bt_l2cap_ecred_chan_connect(conn, chan, BT_EATT_PSM);
+}
+
+struct bt_att_chan* bt_eatt_chan_reserve(struct bt_conn *conn)
+{
+	struct bt_att_chan *chan;
+	struct bt_att_chan *req_chan = 0;
+	struct bt_att *att;
+
+	chan = att_get_fixed_chan(conn);
+	att = chan->att;
+
+	SYS_SLIST_FOR_EACH_CONTAINER(&att->chans, chan, node) {
+		if (!chan->req && atomic_test_bit(chan->flags, ATT_ENHANCED) && 
+			!atomic_test_bit(chan->flags, ATT_RESERVED) ) {
+			atomic_set_bit(chan->flags, ATT_RESERVED);
+			req_chan = chan;
+			break;
+		}
+	}
+	
+	if (!req_chan) {
+		BT_WARN("bt_eatt_chan_reserve failed %p", conn);
+	}
+
+	return req_chan;
+}
+
+bool bt_eatt_chan_release(struct bt_conn *conn, struct bt_att_chan* reserved_chan)
+{
+	struct bt_att_chan *chan;
+	struct bt_att *att;
+	bool is_released = false;
+
+	chan = att_get_fixed_chan(conn);
+	att = chan->att;
+
+	SYS_SLIST_FOR_EACH_CONTAINER(&att->chans, chan, node) {
+		if (reserved_chan == chan && atomic_test_bit(chan->flags, ATT_RESERVED) ) {
+			atomic_clear_bit(chan->flags, ATT_RESERVED);
+			is_released = true;
+			break;
+		}
+	}
+
+	return is_released;
 }
 
 int bt_eatt_disconnect(struct bt_conn *conn)

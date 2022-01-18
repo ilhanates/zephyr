@@ -1421,6 +1421,7 @@ struct bt_gatt_read_params {
 	};
 #ifdef CONFIG_BT_EATT
 	enum bt_att_bearer_option bearer_option;
+	struct bt_att_chan *att_chan;
 #endif /* CONFIG_BT_EATT */
 };
 
