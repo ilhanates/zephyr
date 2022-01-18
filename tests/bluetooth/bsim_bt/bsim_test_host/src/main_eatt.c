@@ -16,6 +16,7 @@
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/hci.h>
 #include <bluetooth/gatt.h>
+#include <bluetooth/att.h>
 #include <bluetooth/uuid.h>
 #include <bluetooth/conn.h>
 
@@ -340,6 +341,20 @@ uint8_t gatt_read_2_cb(struct bt_conn *conn, uint8_t err, struct bt_gatt_read_pa
 	return BT_GATT_ITER_CONTINUE;
 }
 
+uint8_t gatt_read_3_cb(struct bt_conn *conn, uint8_t err, struct bt_gatt_read_params *params,
+		       const void *data, uint16_t length)
+{
+	static uint16_t gatt_read_cb_counter = 0;
+	printk("gatt_read_3_cb: read data: %d, length: %d, err: 0x%X\n", gatt_read_cb_counter++,
+	       length, err);
+
+	if (!data) {
+		return BT_GATT_ITER_STOP;
+	}
+
+	return BT_GATT_ITER_CONTINUE;
+}
+
 void do_discover()
 {
 	int err;
@@ -368,12 +383,19 @@ static void do_reads(enum bt_att_bearer_option bearer_option)
 {
 	int err;
 
+	/* Reserve one channel to use in need. */
+	struct bt_att_chan* reserved_att_chan = bt_eatt_chan_reserve(default_conn);
+	if (!reserved_att_chan) {
+		FAIL("Failed to reserve EATT channel");
+	}
+
 	struct bt_gatt_read_params read_params_1 = { .func = gatt_read_1_cb,
 						     .handle_count = 1,
 						     .single = {
 							     .handle = char_1_attr_handle,
 							     .offset = 0x0000,
 						     },
+							 .att_chan = 0,
 						     .bearer_option = bearer_option };
 
 	struct bt_gatt_read_params read_params_2 = { .func = gatt_read_2_cb,
@@ -382,6 +404,16 @@ static void do_reads(enum bt_att_bearer_option bearer_option)
 							     .handle = char_2_attr_handle,
 							     .offset = 0x0000,
 						     },
+							 .att_chan = 0,
+						     .bearer_option = bearer_option };
+
+	struct bt_gatt_read_params read_params_3 = { .func = gatt_read_3_cb,
+							.handle_count = 1,
+							.single = {
+								.handle = char_2_attr_handle,
+								.offset = 0x0000,
+							},
+							.att_chan = reserved_att_chan,
 						     .bearer_option = bearer_option };
 
 	err = bt_gatt_read(default_conn, &read_params_1);
@@ -393,6 +425,13 @@ static void do_reads(enum bt_att_bearer_option bearer_option)
 	if (err) {
 		FAIL("Gatt Read failed (err %d)\n", err);
 	}
+
+	err = bt_gatt_read(default_conn, &read_params_3);
+	if (err) {
+		FAIL("Gatt Read failed (err %d)\n", err);
+	}
+
+	bt_eatt_chan_release(default_conn, reserved_att_chan);
 
 	k_sleep(K_MSEC(10000)); /*takes 6s ish do to the read on char1*/
 	printk("Reads done\n");
@@ -429,7 +468,7 @@ static void test_central_main(void)
 		FAIL("MTU exchange failed (err %d)\n", err);
 	}
 
-#define N_EATT_CHANNELS 1
+#define N_EATT_CHANNELS 3
 	printk("Connecting %d EATT channels\n", N_EATT_CHANNELS);
 
 	err = bt_eatt_connect(default_conn, N_EATT_CHANNELS);
